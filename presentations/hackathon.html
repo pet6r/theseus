@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Theseus — Hackathon Deck</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reset.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/black.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/monokai.css">
+<style>
+  .reveal section { text-align: left; }
+  .reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
+  .reveal h1 { font-size: 2.2em; }
+  .reveal h2 { font-size: 1.6em; }
+  .reveal h3 { font-size: 1.15em; color: #aaa; }
+  .reveal p, .reveal li { font-size: 0.7em; line-height: 1.5; }
+  .reveal li { margin: 6px 0; }
+  .reveal pre { box-shadow: none; width: 100%; }
+  .reveal pre code {
+    font-size: 0.5em;
+    line-height: 1.35;
+    padding: 16px;
+    max-height: 60vh;
+  }
+  .reveal table { font-size: 0.55em; width: 100%; border-collapse: collapse; }
+  .reveal th, .reveal td { padding: 6px 10px; border-bottom: 1px solid #444; }
+  .reveal th { color: #ccc; text-align: left; }
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 0.55em; margin-right: 6px; }
+  .b-malicious { background: #c0392b; }
+  .b-vulnerable { background: #8e44ad; }
+  .b-suspicious { background: #d35400; }
+  .b-clean { background: #27ae60; }
+  .b-unknown { background: #7f8c8d; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #2a2a2a; color: #ccc; font-size: 0.55em; margin-right: 4px; }
+  .ascii { font-family: ui-monospace, Menlo, monospace; font-size: 0.45em; line-height: 1.35; white-space: pre; opacity: 0.92; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .card { border: 1px solid #333; border-radius: 6px; padding: 12px 16px; background: rgba(255,255,255,0.02); }
+  .muted { opacity: 0.55; font-size: 0.6em; }
+  .accent { color: #f1c40f; }
+  .ok { color: #27ae60; }
+  .bad { color: #c0392b; }
+  .warn { color: #d35400; }
+  .vuln { color: #b07cdc; }
+  .footer { position: absolute; bottom: 8px; right: 20px; font-size: 0.4em; opacity: 0.5; }
+</style>
+</head>
+<body>
+<div class="reveal"><div class="slides">
+
+<!-- ──────────── 1. TITLE ──────────── -->
+<section data-background-gradient="linear-gradient(to bottom, #0a0a0a, #001a33)">
+  <h1 style="margin-bottom: 0;">Theseus</h1>
+  <h3 style="font-size:1.4em; color:#f1c40f; margin-top:0;">Navigate any binary.</h3>
+  <canvas id="labyrinth" width="900" height="240" style="display:block; margin: 18px auto 8px auto; max-width:100%;"></canvas>
+  <p style="margin-top: 14px;">An AI-assisted reverse-engineering pipeline. Drop a binary, get a SOC-actionable report in minutes.</p>
+  <p class="muted">Hackathon · 2026 · built on Ghidra + libghidra + ghidrasql + Claude</p>
+</section>
+
+<!-- ──────────── 2. MYTHOLOGY ──────────── -->
+<section>
+  <h2>The Labyrinth Metaphor</h2>
+  <table style="margin-top: 20px;">
+    <tr><th style="width:25%">Myth</th><th>Reverse engineering</th></tr>
+    <tr><td><strong>Daedalus</strong></td><td>The compiler / packer / obfuscator — the maze-builder</td></tr>
+    <tr><td><strong>The Labyrinth</strong></td><td>The compiled binary — opaque, dense, dead-ends everywhere</td></tr>
+    <tr><td><strong>Theseus</strong></td><td>The analyst trying to navigate it</td></tr>
+    <tr><td><strong>Ariadne's thread</strong></td><td><span class="accent">The AI agent</span> — keeps Theseus oriented, leads him back out</td></tr>
+  </table>
+  <p style="margin-top: 30px;" class="muted">A binary is a maze. The agent isn't the hero — it's the thread.</p>
+</section>
+
+<!-- ──────────── 3. PROBLEM ──────────── -->
+<section>
+  <h2>The SOC reverse-engineering bottleneck</h2>
+  <ul>
+    <li><strong>Alert volume</strong>: a mid-sized SOC sees 100s of "suspicious binary" tickets per day. EDR flags ≠ verdict.</li>
+    <li><strong>Manual RE is slow</strong>: a competent analyst burns <span class="accent">30–120 min</span> per unknown sample to reach a confidence level worth escalating.</li>
+    <li><strong>Most binaries are boring</strong>: signed installers, in-house tools, false-positive heuristic hits. The analyst's expensive time is wasted on triage.</li>
+    <li><strong>Output is inconsistent</strong>: free-form notes in ticket comments, no shared structure, hard to feed back into SOAR.</li>
+  </ul>
+  <p class="muted" style="margin-top: 20px;">What if static triage of unknown binaries cost <span class="ok">cents per sample</span> instead of <span class="bad">hours per sample</span>?</p>
+</section>
+
+<!-- ──────────── 4. ELEVATOR PITCH ──────────── -->
+<section>
+  <h2>Theseus in 30 seconds</h2>
+  <div class="grid2" style="margin-top: 20px;">
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Input</h3>
+      <p style="margin:0;">A single binary. PE, ELF, Mach-O, kernel driver.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Pipeline</h3>
+      <p style="margin:0;">Four sequential phases, each one tool-using Claude against a live Ghidra SQL surface.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Output</h3>
+      <p style="margin:0;"><code>report.json</code> (schema-stable) + reveal.js deck + optional SOAR webhook push.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Time</h3>
+      <p style="margin:0;">~3 min for calc.exe. ~10–20 min for a real malware sample.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────── 5. ARCHITECTURE ──────────── -->
+<section>
+  <h2>Architecture</h2>
+<pre class="ascii">
+   CLI / GUI / FastAPI
+          │
+          ▼
+   orchestrator.analyze(binary)
+          │
+          ├──► HeadlessRunner  (subprocess: analyzeHeadless.bat + LibGhidraHeadlessServer)
+          │       └──► libghidra HTTP :180xx   (protobuf RPC)
+          │
+          ├──► GhidrasqlRunner  (subprocess: ghidrasql --url … --http)
+          │       └──► ghidrasql HTTP :80xx   (POST /query, raw SQL body)
+          │
+          └──► for phase in [triage, capability, ioc, verdict]:
+                  backend.run_phase(system, prompt, prior, …)
+                       │
+                       └──► one of:
+                              AnthropicBackend     (API + ToolRouter)
+                              ClaudeCodeBackend    (Agent SDK + in-proc MCP)
+                              OpenAICompatBackend  (vLLM / llama.cpp — future)
+                       │
+                       └──► tool exposed: ghidrasql_query
+                                          → POST /query (raw SQL)
+                                          → 57+ tables, 77+ views
+</pre>
+  <p class="muted">Theseus is a thin orchestrator over three components it doesn't own: Ghidra, libghidra, ghidrasql.</p>
+</section>
+
+<!-- ──────────── 6. PHASES ──────────── -->
+<section>
+  <h2>The 4-phase loop</h2>
+<pre class="ascii">
+                        ┌──────────────────┐
+                        │   binary in      │
+                        └────────┬─────────┘
+                                 │
+                                 ▼
+            ┌────────────────────────────────────────┐
+            │   ▶ TRIAGE                              │
+            │   format · arch · packing               │
+            │   funcs/imports/strings counts          │
+            │   suspicion_score ∈ [0..100]            │
+            └────────┬───────────┬───────────────────┘
+                     │           │
+        triage JSON  │           │  triage JSON
+                     ▼           ▼
+       ┌──────────────────┐  ┌──────────────────┐
+       │ ▶ CAPABILITY     │  │ ▶ IOC            │
+       │ MITRE ATT&CK     │  │ urls, ips,       │
+       │ technique map    │  │ mutexes, regkeys │
+       │ + evidence addrs │  │ xref-validated   │
+       └────────┬─────────┘  └────────┬─────────┘
+                │                     │
+       caps[]   │     triage          │  iocs[]
+                ▼     │               ▼
+                  ┌───┴────────────────────────┐
+                  │   ▶ VERDICT                │
+                  │   score = f(triage, caps,  │
+                  │            iocs, packed)   │
+                  │   label  → clean / susp /  │
+                  │            vulnerable /    │
+                  │            malicious /     │
+                  │            unknown         │
+                  │   soc_action + yara_rule?  │
+                  └────────────┬───────────────┘
+                               │
+                               ▼
+                       report.json + deck
+</pre>
+  <p class="muted" style="margin-top: 6px;">Each phase ends in strict JSON. <code>capability</code> and <code>ioc</code> both see <code>triage</code>; <code>verdict</code> sees all three. <code>orchestrator._extract_json</code> recovers the largest JSON object/array from the model's output.</p>
+</section>
+
+<!-- ──────────── 7. SINGLE TOOL ──────────── -->
+<section>
+  <h2>One tool. Massive surface.</h2>
+  <p>The agent gets exactly <strong>one</strong> tool: <code>ghidrasql_query(sql)</code>. That's it. No filesystem, no shell, no decompiler RPC, no network.</p>
+  <p>But the SQL surface is wide enough to do real RE work:</p>
+  <table>
+    <tr><th>Category</th><th>Tables / views</th></tr>
+    <tr><td>Functions</td><td><code>funcs</code>, <code>function_locals</code>, <code>callers</code>, <code>callees</code>, <code>callgraph_edges</code></td></tr>
+    <tr><td>Code</td><td><code>instructions</code>, <code>blocks</code>, <code>cfg_edges</code>, <code>loops</code>, <code>switch_tables</code></td></tr>
+    <tr><td>References</td><td><code>xrefs</code>, <code>call_edges</code>, <code>string_refs</code></td></tr>
+    <tr><td>Symbols</td><td><code>imports</code>, <code>exports</code>, <code>strings</code>, <code>equates</code></td></tr>
+    <tr><td>Decompiler</td><td><code>pseudocode</code>, <code>decomp_lvars</code>, <code>decomp_tokens</code></td></tr>
+    <tr><td>Memory / Types</td><td><code>memory_blocks</code>, <code>types</code>, <code>type_members</code></td></tr>
+  </table>
+  <p class="muted" style="margin-top:12px;">The agent writes its own SQL. It can <em>also</em> annotate (UPDATE funcs SET name = …) but Theseus deliberately keeps it read-mostly.</p>
+</section>
+
+<!-- ──────────── 7.25 THREAD VISUALIZATION ──────────── -->
+<section>
+  <h2 style="font-size: 1.3em;">The thread, pulled one query at a time</h2>
+  <p style="font-size: 0.55em;">Each SQL query is a length of Ariadne's thread: the agent steps further into the maze, but the path back is always anchored to a row Ghidra has already verified.</p>
+<pre class="ascii" style="font-size: 0.32em; line-height: 1.25;">
+   ┌──────────┐                                ┌─────────────────┐
+   │  Agent   │  1. "where am I?"              │   ghidrasql DB  │
+   │ (Claude) │ ─────────────────────────────► │ (Ghidra-backed) │
+   │          │   SELECT * FROM db_info        │                 │
+   │  Theseus │ ◄───────────────────────────── │  language_id,   │
+   │          │   {x86:LE:64, PE, base=…}      │  format, base   │
+   │          │                                │                 │
+   │          │  2. "what does it call?"       │                 │
+   │          │ ─────────────────────────────► │                 │
+   │          │   SELECT name FROM imports     │                 │
+   │          │ ◄───────────────────────────── │  MmMapIoSpaceEx │
+   │          │   IoCreate…, PsLookup…, …      │  PsLookup…, …   │
+   │          │                                │                 │
+   │          │  3. "any device names?"        │                 │
+   │          │ ─────────────────────────────► │                 │
+   │          │   SELECT value, address        │                 │
+   │          │   FROM strings                 │                 │
+   │          │   WHERE value LIKE '%Device%'  │                 │
+   │          │ ◄───────────────────────────── │  \\Device\\…    │
+   │          │   "\\Device\\cupeludo"@0x…2030 │                 │
+   │          │                                │                 │
+   │          │  4. "show me the IOCTL fn"     │                 │
+   │          │ ─────────────────────────────► │                 │
+   │          │   SELECT * FROM pseudocode     │                 │
+   │          │   WHERE func_addr = 0x14001a00 │                 │
+   │          │ ◄───────────────────────────── │  decompiled C   │
+   │          │   if(ioctl==0x226004) …        │                 │
+   │          │                                │                 │
+   └──────────┘                                └─────────────────┘
+       │
+       ▼
+   emit JSON (every claim cites an address Ghidra returned)
+</pre>
+  <p class="muted" style="margin-top: 6px; font-size: 0.5em;">Each request narrows the labyrinth. No row, no claim. The thread is auditable — every step in <code>report.json</code> traces back to a SQL response.</p>
+</section>
+
+<!-- ──────────── 7.5 HALLUCINATION RESISTANCE ──────────── -->
+<section>
+  <h2>Why the thread keeps it honest</h2>
+  <p>Free-form LLM RE invents function names, fabricates addresses, paraphrases decompilation that never existed. Theseus is structurally resistant — the agent <strong>cannot</strong> answer questions whose evidence isn't already in the database.</p>
+  <table style="margin-top: 14px;">
+    <tr><th style="width:34%">Hallucination class</th><th>Why it can't happen here</th></tr>
+    <tr>
+      <td>Inventing a function name</td>
+      <td><code>funcs</code> is populated by Ghidra's analyzer from the actual binary. <code>SELECT * FROM funcs WHERE name = 'fake_fn'</code> returns 0 rows. Empty result → agent must revise.</td>
+    </tr>
+    <tr>
+      <td>Fabricating an address</td>
+      <td>Every address cited in the report has to come from a row Ghidra returned. There is no other source — the model has no access to the bytes directly.</td>
+    </tr>
+    <tr>
+      <td>Paraphrasing decompilation</td>
+      <td><code>pseudocode</code> is Ghidra's decompiler output for the exact function — verbatim C-like code, not a paraphrase. Agent quotes; doesn't summarize from memory.</td>
+    </tr>
+    <tr>
+      <td>Wrong xrefs / call graph</td>
+      <td><code>xrefs</code> and <code>callgraph_edges</code> are computed by Ghidra. Agent reads them; can't synthesize them.</td>
+    </tr>
+    <tr>
+      <td>Imaginary imports / strings</td>
+      <td><code>imports</code> + <code>strings</code> are byte-extracted from the PE/ELF. Agent queries; the binary is the source of truth.</td>
+    </tr>
+  </table>
+  <p class="muted" style="margin-top: 14px;">The system prompt enforces it: <em>"Every claim must cite an address, function, import, or string from the database. Never speculate without grounding."</em> The relational schema makes that rule mechanically checkable, not just aspirational.</p>
+</section>
+
+<!-- ──────────── 8. CODE: BACKEND ABSTRACTION ──────────── -->
+<section>
+  <h2>Code: backend abstraction</h2>
+<pre><code class="python"># src/theseus/backends/base.py
+class LLMBackend(Protocol):
+    def run_phase(
+        self,
+        *,
+        system: str,
+        user_prompt: str,
+        phase_name: str,
+        max_turns: int,
+        log: Callable[[str], None],
+        on_token: Callable[[int, int], None] | None = None,
+        on_progress: Callable[[str, float], None] | None = None,
+    ) -> PhaseResult: ...
+
+
+def get_backend(name, *, ghidrasql_url, libghidra_url, model) -> LLMBackend:
+    name = (name or os.environ.get("THESEUS_BACKEND") or "anthropic").lower()
+    if name == "anthropic":
+        return AnthropicBackend(ghidrasql_url=..., model=model)
+    if name in ("claude_code", "claude-code", "cc"):
+        return ClaudeCodeBackend(ghidrasql_url=..., model=model)
+    raise ValueError(f"unknown THESEUS_BACKEND: {name!r}")
+</code></pre>
+  <p class="muted">Adding an open-source local backend = drop a file in <code>backends/</code> + one line in <code>get_backend</code>.</p>
+</section>
+
+<!-- ──────────── 9. CODE: PHASE LOOP ──────────── -->
+<section>
+  <h2>Code: the phase loop</h2>
+<pre><code class="python"># src/theseus/orchestrator.py (excerpt)
+with headless, sql:
+    backend = get_backend(cfg.backend,
+                          ghidrasql_url=sql.base_url,
+                          libghidra_url=headless.base_url,
+                          model=cfg.model)
+    with backend:
+        for phase, prompt_text in phase_prompts.items():
+            prior = build_prior(phase, phase_payloads)
+            pr = backend.run_phase(
+                system=system_prompt,
+                user_prompt=_build_user_prompt(prompt_text, prior),
+                phase_name=phase,
+                max_turns=cfg.max_turns,
+                log=cb.log,
+                on_token=cb.on_token,
+                on_progress=cb.on_phase_progress,
+            )
+            phase_payloads[phase] = _extract_json(pr.raw_text)
+</code></pre>
+  <p class="muted">Phases are deliberately sequential — capability+ioc see triage; verdict sees all three.</p>
+</section>
+
+<!-- ──────────── 10. CODE: MCP TOOL ──────────── -->
+<section>
+  <h2>Code: in-process MCP tool (claude_code backend)</h2>
+<pre><code class="python"># src/theseus/backends/claude_code.py (excerpt)
+@tool(
+    "ghidrasql_query",
+    "Execute SQL against the ghidrasql HTTP server. Use LIMIT.",
+    {"sql": str},
+)
+async def ghidrasql_query(args):
+    sql = args["sql"].strip()
+    async with httpx.AsyncClient(timeout=60.0) as c:
+        resp = await c.post(
+            f"{ghidrasql_url}/query",
+            content=sql.encode("utf-8"),
+            headers={"Content-Type": "text/plain"},
+        )
+        return {"content": [{"type": "text", "text": resp.text}]}
+
+server = create_sdk_mcp_server(name="ghidrasql", version="1.0.0",
+                               tools=[ghidrasql_query])
+
+options = ClaudeAgentOptions(
+    system_prompt=system,
+    mcp_servers={"ghidrasql": server},
+    allowed_tools=["mcp__ghidrasql__ghidrasql_query"],
+    max_turns=max_turns,
+    model=self.model,
+)
+async for message in query(prompt=user_prompt, options=options): ...
+</code></pre>
+</section>
+
+<!-- ──────────── 11. BACKEND MATRIX ──────────── -->
+<section>
+  <h2>Pluggable backends</h2>
+  <table>
+    <tr><th>Backend</th><th>Auth</th><th>Cost model</th><th>Status</th></tr>
+    <tr>
+      <td><code>anthropic</code></td>
+      <td><code>ANTHROPIC_API_KEY</code></td>
+      <td>Pay per token</td>
+      <td class="ok">shipping</td>
+    </tr>
+    <tr>
+      <td><code>claude_code</code></td>
+      <td><code>claude login</code> (OAuth)</td>
+      <td>Included in Max / Pro subscription</td>
+      <td class="ok">shipping</td>
+    </tr>
+    <tr>
+      <td><code>openai_compat</code></td>
+      <td>None — local vLLM / llama.cpp</td>
+      <td>Compute only (on firm hardware)</td>
+      <td class="warn">roadmap</td>
+    </tr>
+  </table>
+  <p class="muted" style="margin-top: 16px;">Why three? Because the people who pay for the hackathon and the people who run RE on classified samples are not always the same.</p>
+</section>
+
+<!-- ──────────── 12. PAIN POINTS ──────────── -->
+<section>
+  <h2>Pain points — things that bit me</h2>
+  <ul>
+    <li><strong>Port collisions</strong>: ghidrasql's default RPC port is 18080 — same as the LibGhidraHost GUI. <code>find_free_port</code> + <code>--rpc-port</code> override fixed it.</li>
+    <li><strong>Protobuf vs JSON</strong>: <code>libghidra/rpc</code> is binary protobuf, not JSON. Dropped the <code>libghidra_decompile</code> tool entirely — agent uses ghidrasql's <code>pseudocode</code> table instead.</li>
+    <li><strong>Raw-SQL body</strong>: <code>POST /query</code> wants <code>Content-Type: text/plain</code> with raw SQL, <em>not</em> <code>{"sql": …}</code>. Cost me an evening.</li>
+    <li><strong>cp1252 codec death</strong>: redirecting stdout on Windows breaks Rich's box-drawing chars. Force <code>PYTHONIOENCODING=utf-8</code> + <code>sys.stdout.reconfigure</code> at CLI entry.</li>
+    <li><strong>SDK hard-fails on max_turns</strong>: Anthropic SDK degrades gracefully, Claude Agent SDK raises. Wrapped in try/except and use partial output.</li>
+    <li><strong>Drag-and-drop</strong>: DearPyGui has none. Win32 <code>WM_DROPFILES</code> + WndProc subclass via <code>ctypes</code> — and remember to pin <code>argtypes</code> on x64 or HDROP overflows c_int.</li>
+  </ul>
+</section>
+
+<!-- ──────────── 13. HUMAN-IN-THE-LOOP ──────────── -->
+<section>
+  <h2>Where the human is in the loop</h2>
+  <table>
+    <tr><th>Stage</th><th>Who's driving</th><th>Why</th></tr>
+    <tr><td>Sample acquisition</td><td><span class="accent">Human</span></td><td>Decides what to triage — quarantined file from EDR, IR engagement, threat-intel feed.</td></tr>
+    <tr><td>Sandbox isolation</td><td><span class="accent">Human</span></td><td>Theseus is static-only by design. Analyst guarantees the run happens in FlareVM / REMnux / network-isolated host.</td></tr>
+    <tr><td>Pipeline</td><td><span class="ok">Agent</span></td><td>Triage → capability → ioc → verdict. No human touch.</td></tr>
+    <tr><td>Verdict review</td><td><span class="accent">Human</span></td><td>Reads the deck. The model proposes; the analyst disposes.</td></tr>
+    <tr><td>SOC action</td><td><span class="accent">Human</span></td><td>Decides whether to push the report to SOAR, escalate, open an incident.</td></tr>
+  </table>
+  <p class="muted" style="margin-top: 16px;">The agent is a thread, not a hero. It guides — it doesn't decide.</p>
+</section>
+
+<!-- ──────────── 14. VERDICT TAXONOMY ──────────── -->
+<section>
+  <h2>Verdict taxonomy</h2>
+  <p>The schema's <code>verdict.label</code> enum collapses RE outcomes into 5 buckets:</p>
+  <p style="margin-top: 24px;">
+    <span class="badge b-clean">CLEAN</span> &nbsp; benign, signed, no offensive primitives. <code>soc_action: ignore</code>
+  </p>
+  <p>
+    <span class="badge b-suspicious">SUSPICIOUS</span> &nbsp; weak signals, packed, anti-debug. <code>enrich / monitor</code>
+  </p>
+  <p>
+    <span class="badge b-vulnerable">VULNERABLE</span> &nbsp; BYOVD / dual-use — exposes ring0 R/W primitives. <code>quarantine + escalate</code>
+  </p>
+  <p>
+    <span class="badge b-malicious">MALICIOUS</span> &nbsp; performs C2, exfil, injection, destructive action. <code>quarantine / escalate</code>
+  </p>
+  <p>
+    <span class="badge b-unknown">UNKNOWN</span> &nbsp; analysis incomplete (packed, no symbols, agent gave up). <code>escalate to human</code>
+  </p>
+  <p class="muted" style="margin-top: 20px;">Adding <span class="vuln">vulnerable</span> was a hackathon-day insight — a poorly-written signed driver isn't malicious, but a BYOVD weapon on a corporate endpoint is still an incident.</p>
+</section>
+
+<!-- ──────────── 15. DEMO ──────────── -->
+<section>
+  <h2>Live demo — two binaries</h2>
+  <div class="grid2" style="margin-top: 20px;">
+    <div class="card">
+      <p><span class="badge b-clean">CLEAN</span> score 0.15</p>
+      <p><code>C:\Windows\System32\calc.exe</code></p>
+      <p class="muted">Microsoft-signed Calculator stub. Launches <code>ms-calculator:</code> URI via <code>ShellExecuteW</code> to hand off to UWP. 31 funcs / 78 strings. 174 s wall.</p>
+      <p>SOC action: <strong class="ok">IGNORE</strong></p>
+    </div>
+    <div class="card">
+      <p><span class="badge b-vulnerable">VULNERABLE</span> score 0.90</p>
+      <p><code>WinRing0_1_2_0.sys</code> (Shirui Electronics)</p>
+      <p class="muted">Signed kernel driver exposing arbitrary phys-mem R/W + WRMSR/RDMSR + PCI config R/W via IOCTL. Textbook BYOVD shell.</p>
+      <p>SOC action: <strong class="vuln">QUARANTINE</strong></p>
+    </div>
+  </div>
+  <p class="muted" style="margin-top: 16px;">Both run end-to-end through the same pipeline. No per-target tuning.</p>
+</section>
+
+<!-- ──────────── 16. COST ──────────── -->
+<section>
+  <h2>Cost telemetry</h2>
+  <p>Every report carries its own bill-of-tokens:</p>
+<pre><code class="json" data-line-numbers="4">"cost": {
+  "input_tokens":        79,
+  "output_tokens":     9213,
+  "cache_read_tokens": 830569,
+  "cache_write_tokens":131678,
+  "usd": 1.469
+}
+</code></pre>
+  <p style="margin-top: 8px; font-size: 0.55em;">
+    <span style="color:#f1c40f;">▲ cache_read_tokens: 830,569</span> &nbsp;—&nbsp;
+    system prompt + table-schema preamble cached across all 4 phases.
+    Cache reads bill at <strong>~10%</strong> of fresh-input rate, so the effective cost drops <span class="ok">~90%</span> vs naive pricing.
+  </p>
+  <p style="margin-top: 14px;">Two pricing paths:</p>
+  <ul>
+    <li><code>anthropic</code> backend — local pricing table × token counts</li>
+    <li><code>claude_code</code> backend — SDK reports <code>ResultMessage.total_cost_usd</code> directly</li>
+  </ul>
+</section>
+
+<!-- ──────────── 16.5 COST CURVE GRAPH ──────────── -->
+<section>
+  <h2>The cost curve, drawn</h2>
+  <p style="font-size: 0.55em;">Per-binary static-RE cost — log scale, because the spread is four orders of magnitude.</p>
+  <canvas id="costchart" width="940" height="380" style="display:block; margin: 8px auto; max-width:100%;"></canvas>
+  <p class="muted" style="font-size: 0.45em; margin-top: 4px;">
+    Manual: senior analyst time × hourly rate. &nbsp;
+    API: per-token Anthropic bill, prompt cache active. &nbsp;
+    Max: $100/mo amortized over ~3K binaries/mo throughput. &nbsp;
+    Local: GPU electricity only on already-owned hardware.
+  </p>
+</section>
+
+<!-- ──────────── 17. ROADMAP ──────────── -->
+<section>
+  <h2>What's next</h2>
+  <ul>
+    <li><strong>Local-model backend</strong> — vLLM / llama.cpp with OpenAI-compatible <code>/v1/chat/completions</code> + tools. Qwen2.5-Coder, Llama 3.1, Hermes. For air-gapped / classified work.</li>
+    <li><strong>Schema enrichment</strong> — <code>verdict.subtype</code>: <code>byovd_weapon</code> / <code>rat</code> / <code>loader</code> / <code>infostealer</code>. Finer SOAR routing.</li>
+    <li><strong>Replay cache</strong> — same binary, skip Ghidra reanalysis, reuse the ghidrasql snapshot. Cuts a 3 min run to ~30 s.</li>
+    <li><strong>SOAR adapters</strong> — first-class Splunk SOAR, Tines, XSOAR integrations. Today: generic webhook.</li>
+    <li><strong>Multi-binary campaigns</strong> — IR engagements drop a folder of artifacts; correlate IoCs across the set.</li>
+    <li><strong>YARA / Sigma export</strong> — already half-wired in the verdict phase; promote to first-class outputs.</li>
+  </ul>
+</section>
+
+<!-- ──────────── 18. TAKEAWAYS ──────────── -->
+<section>
+  <h2 style="font-size: 1.4em;">Takeaways</h2>
+  <p style="font-size: 0.55em; opacity: 0.8;">Theseus is one project. The shift it sits on top of is bigger.</p>
+  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 14px;">
+
+    <div class="card" style="padding: 10px 14px;">
+      <h3 style="margin:0 0 6px 0; font-size: 0.6em; color:#f1c40f;">⏱  Cost curve collapsed</h3>
+      <p style="margin:0; font-size: 0.42em; line-height: 1.4;">Static RE went from <span class="bad">1–2 hours</span> of senior analyst time to <span class="ok">cents and minutes</span>. Capability not new — price is.</p>
+    </div>
+
+    <div class="card" style="padding: 10px 14px;">
+      <h3 style="margin:0 0 6px 0; font-size: 0.6em; color:#f1c40f;">🔓  Obscurity is dead</h3>
+      <p style="margin:0; font-size: 0.42em; line-height: 1.4;">Stripping, packing, "security through obscurity" already lost to manual RE. They lose faster now. Protect logic <em>structurally</em>: server-side checks, attestation, enclaves.</p>
+    </div>
+
+    <div class="card" style="padding: 10px 14px;">
+      <h3 style="margin:0 0 6px 0; font-size: 0.6em; color:#f1c40f;">📜  IP risk widens</h3>
+      <p style="margin:0; font-size: 0.42em; line-height: 1.4;">Algorithms, license checks, undocumented protocols, file formats — all cheaper to recover. Legal "no reverse engineering" clauses don't stop the capability; they only matter <em>after</em>.</p>
+    </div>
+
+    <div class="card" style="padding: 10px 14px;">
+      <h3 style="margin:0 0 6px 0; font-size: 0.6em; color:#27ae60;">🛡  Defenders gain too</h3>
+      <p style="margin:0; font-size: 0.42em; line-height: 1.4;">Supply-chain vuln research, SOC-scale malware triage, BYOVD detection, IR campaign correlation — all benefit from the same cost drop.</p>
+    </div>
+
+    <div class="card" style="padding: 10px 14px;">
+      <h3 style="margin:0 0 6px 0; font-size: 0.6em; color:#27ae60;">⚖  "Can it" → "May it"</h3>
+      <p style="margin:0; font-size: 0.42em; line-height: 1.4;">Technical barriers gave way to legal and ethical ones. Sandboxing, authorization, audit trails, clear scope — the new gating layer.</p>
+    </div>
+
+    <div class="card" style="padding: 10px 14px;">
+      <h3 style="margin:0 0 6px 0; font-size: 0.6em; color:#27ae60;">🌐  Open-source as equalizer</h3>
+      <p style="margin:0; font-size: 0.42em; line-height: 1.4;">If competitors can read your binary cheaply, open-sourcing non-core parts costs less than it used to. The trade math just shifted.</p>
+    </div>
+
+  </div>
+  <p class="muted" style="margin-top: 14px; font-size: 0.5em; text-align: center;">Theseus is built for defenders. The technique is dual-use — that's true of every advance in RE since the disassembler.</p>
+</section>
+
+<!-- ──────────── 19. CLOSE ──────────── -->
+<section data-background-gradient="linear-gradient(to bottom, #001a33, #0a0a0a)">
+  <h2 style="margin-top: 60px;">Theseus</h2>
+  <p style="font-size: 1.1em;">SIEM → quarantine → <strong>Theseus</strong> → verdict → SOAR</p>
+  <p style="margin-top: 40px; opacity: 0.7;">A binary is a maze. The agent isn't the hero — it's the thread.</p>
+  <p class="muted" style="margin-top: 60px;">github.com/leal/theseus &nbsp; · &nbsp; built on Ghidra + libghidra + ghidrasql + Claude</p>
+</section>
+
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  controls: true,
+  progress: true,
+  slideNumber: 'c/t',
+  transition: 'slide',
+  plugins: [ RevealHighlight ]
+});
+</script>
+
+<!-- ──────────── LABYRINTH ANIMATION ────────────
+     Recursive-backtracker maze + BFS-found path. A golden "Ariadne thread"
+     traces the solution slowly; once it reaches the exit the maze regenerates
+     and the thread restarts. Pure canvas, no deps.
+-->
+<script>
+(function () {
+  const canvas = document.getElementById('labyrinth');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const CELL = 16;
+  const COLS = Math.floor(W / CELL);
+  const ROWS = Math.floor(H / CELL);
+
+  let cells, path, progress, fadeOut;
+
+  function buildMaze() {
+    cells = Array.from({length: ROWS}, () =>
+      Array.from({length: COLS}, () => ({n:true, s:true, e:true, w:true, visited:false}))
+    );
+    // Recursive backtracker (iterative)
+    const stack = [[0, 0]];
+    cells[0][0].visited = true;
+    while (stack.length) {
+      const [r, c] = stack[stack.length - 1];
+      const nbrs = [];
+      if (r > 0 && !cells[r-1][c].visited) nbrs.push([r-1, c, 'n', 's']);
+      if (r < ROWS-1 && !cells[r+1][c].visited) nbrs.push([r+1, c, 's', 'n']);
+      if (c > 0 && !cells[r][c-1].visited) nbrs.push([r, c-1, 'w', 'e']);
+      if (c < COLS-1 && !cells[r][c+1].visited) nbrs.push([r, c+1, 'e', 'w']);
+      if (!nbrs.length) { stack.pop(); continue; }
+      const [nr, nc, from, to] = nbrs[(Math.random() * nbrs.length) | 0];
+      cells[r][c][from] = false;
+      cells[nr][nc][to] = false;
+      cells[nr][nc].visited = true;
+      stack.push([nr, nc]);
+    }
+  }
+
+  function solve() {
+    const seen = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+    seen[0][0] = [-1, -1];
+    const q = [[0, 0]];
+    while (q.length) {
+      const [r, c] = q.shift();
+      if (r === ROWS-1 && c === COLS-1) break;
+      const cell = cells[r][c];
+      const push = (nr, nc) => { if (!seen[nr][nc]) { seen[nr][nc] = [r, c]; q.push([nr, nc]); } };
+      if (!cell.n && r > 0) push(r-1, c);
+      if (!cell.s && r < ROWS-1) push(r+1, c);
+      if (!cell.w && c > 0) push(r, c-1);
+      if (!cell.e && c < COLS-1) push(r, c+1);
+    }
+    // Backtrack path
+    const out = [];
+    let r = ROWS-1, c = COLS-1;
+    while (r !== -1) {
+      out.push([r, c]);
+      const prev = seen[r][c];
+      r = prev[0]; c = prev[1];
+    }
+    return out.reverse();
+  }
+
+  function drawMaze(alpha = 1) {
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = `rgba(80, 80, 100, ${0.55 * alpha})`;
+    ctx.lineWidth = 1.2;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const x = c * CELL, y = r * CELL;
+        const cell = cells[r][c];
+        ctx.beginPath();
+        if (cell.n) { ctx.moveTo(x, y); ctx.lineTo(x + CELL, y); }
+        if (cell.s) { ctx.moveTo(x, y + CELL); ctx.lineTo(x + CELL, y + CELL); }
+        if (cell.w) { ctx.moveTo(x, y); ctx.lineTo(x, y + CELL); }
+        if (cell.e) { ctx.moveTo(x + CELL, y); ctx.lineTo(x + CELL, y + CELL); }
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawThread(prog, alpha = 1) {
+    if (!path.length) return;
+    ctx.strokeStyle = `rgba(241, 196, 15, ${alpha})`;
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(241, 196, 15, 0.6)';
+    ctx.shadowBlur = 6;
+    const half = CELL / 2;
+    const intP = Math.min(Math.floor(prog), path.length - 1);
+    ctx.beginPath();
+    ctx.moveTo(path[0][1] * CELL + half, path[0][0] * CELL + half);
+    for (let i = 1; i <= intP; i++) {
+      ctx.lineTo(path[i][1] * CELL + half, path[i][0] * CELL + half);
+    }
+    if (intP < path.length - 1) {
+      const frac = prog - intP;
+      const [pr, pc] = path[intP];
+      const [nr, nc] = path[intP + 1];
+      ctx.lineTo(
+        pc * CELL + half + (nc - pc) * CELL * frac,
+        pr * CELL + half + (nr - pr) * CELL * frac
+      );
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Entry + exit markers
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.85)';
+    ctx.beginPath();
+    ctx.arc(half, half, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(192, 57, 43, 0.85)';
+    ctx.beginPath();
+    ctx.arc((COLS - 1) * CELL + half, (ROWS - 1) * CELL + half, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function reset() {
+    buildMaze();
+    path = solve();
+    progress = 0;
+    fadeOut = 0;
+  }
+  reset();
+
+  function loop() {
+    if (fadeOut > 0) {
+      drawMaze(fadeOut);
+      drawThread(path.length - 1, fadeOut);
+      fadeOut -= 0.02;
+      if (fadeOut <= 0) reset();
+    } else {
+      drawMaze();
+      drawThread(progress);
+      progress += 0.55;
+      if (progress >= path.length - 1) {
+        progress = path.length - 1;
+        fadeOut = 1.0;
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+</script>
+
+<!-- ──────────── COST-CURVE BAR CHART ──────────── -->
+<script>
+(function () {
+  const canvas = document.getElementById('costchart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const data = [
+    { label: 'Manual analyst',     cost: 120,   color: '#c0392b', sub: 'senior RE · ~1.5 hr × $80/hr' },
+    { label: 'AI · Anthropic API', cost: 1.50,  color: '#d35400', sub: 'per binary · prompt cache' },
+    { label: 'AI · Claude Max',    cost: 0.03,  color: '#27ae60', sub: '$100/mo ÷ ~3K binaries' },
+    { label: 'AI · local model',   cost: 0.01,  color: '#8e44ad', sub: 'GPU electricity only' },
+  ];
+
+  const margin = { l: 90, r: 30, t: 70, b: 90 };
+  const plotW = W - margin.l - margin.r;
+  const plotH = H - margin.t - margin.b;
+
+  const minLog = Math.log10(0.005);
+  const maxLog = Math.log10(300);
+  const yFor = (v) => margin.t + plotH * (1 - (Math.log10(v) - minLog) / (maxLog - minLog));
+  const baseY = margin.t + plotH;
+
+  function drawChart(animProgress) {
+    ctx.clearRect(0, 0, W, H);
+
+    // Y-axis decade gridlines + labels
+    ctx.strokeStyle = '#2a2a2a';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#888';
+    ctx.font = '13px ui-monospace, Menlo, monospace';
+    ctx.textAlign = 'right';
+    for (const tick of [0.01, 0.1, 1, 10, 100]) {
+      const y = yFor(tick);
+      ctx.beginPath();
+      ctx.moveTo(margin.l, y);
+      ctx.lineTo(W - margin.r, y);
+      ctx.stroke();
+      ctx.fillText('$' + (tick < 1 ? tick.toFixed(2) : tick), margin.l - 10, y + 4);
+    }
+
+    // Axis line
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(margin.l, margin.t);
+    ctx.lineTo(margin.l, baseY);
+    ctx.lineTo(W - margin.r, baseY);
+    ctx.stroke();
+
+    // Bars
+    const slot = plotW / data.length;
+    const barW = slot * 0.5;
+    data.forEach((d, i) => {
+      const cx = margin.l + slot * (i + 0.5);
+      const fullTop = yFor(d.cost);
+      const animTop = baseY - (baseY - fullTop) * animProgress;
+
+      // Bar
+      const grad = ctx.createLinearGradient(0, animTop, 0, baseY);
+      grad.addColorStop(0, d.color);
+      grad.addColorStop(1, d.color + '88');
+      ctx.fillStyle = grad;
+      ctx.fillRect(cx - barW / 2, animTop, barW, baseY - animTop);
+
+      // Bar top stroke
+      ctx.strokeStyle = d.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - barW / 2, animTop);
+      ctx.lineTo(cx + barW / 2, animTop);
+      ctx.stroke();
+
+      // $ label above bar (only once bar grown enough)
+      if (animProgress > 0.65) {
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = 'bold 18px ui-monospace, Menlo, monospace';
+        ctx.textAlign = 'center';
+        const dollar = d.cost >= 1 ? '$' + d.cost.toFixed(2) : '$' + d.cost.toFixed(2);
+        ctx.fillText(dollar, cx, animTop - 10);
+      }
+
+      // X-axis labels
+      ctx.fillStyle = '#ddd';
+      ctx.font = 'bold 13px ui-monospace, Menlo, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(d.label, cx, baseY + 22);
+      ctx.fillStyle = '#777';
+      ctx.font = '11px ui-monospace, Menlo, monospace';
+      ctx.fillText(d.sub, cx, baseY + 40);
+    });
+
+    // Collapse arrow — manual top → local top, diagonal
+    if (animProgress > 0.85) {
+      const a = (animProgress - 0.85) / 0.15;
+      const x1 = margin.l + slot * 0.5;
+      const y1 = yFor(data[0].cost) - 28;
+      const x2 = margin.l + slot * 3.5;
+      const y2 = yFor(data[3].cost) - 28;
+      const tx = x1 + (x2 - x1) * a;
+      const ty = y1 + (y2 - y1) * a;
+
+      ctx.strokeStyle = 'rgba(241, 196, 15, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Arrowhead at current tip
+      if (a > 0.05) {
+        const ang = Math.atan2(ty - y1, tx - x1);
+        ctx.fillStyle = 'rgba(241, 196, 15, 0.9)';
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - 10 * Math.cos(ang - 0.4), ty - 10 * Math.sin(ang - 0.4));
+        ctx.lineTo(tx - 10 * Math.cos(ang + 0.4), ty - 10 * Math.sin(ang + 0.4));
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Caption
+      if (a > 0.6) {
+        ctx.fillStyle = 'rgba(241, 196, 15, ' + ((a - 0.6) / 0.4) + ')';
+        ctx.font = 'italic bold 17px ui-monospace, Menlo, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('~10,000× cheaper end-to-end', W / 2, margin.t + 20);
+      }
+    }
+  }
+
+  // Easing + animation driver — kick off when this slide first becomes visible
+  let started = false;
+  let t0 = 0;
+  function step(ts) {
+    if (!t0) t0 = ts;
+    const dt = (ts - t0) / 1200; // ~1.2s grow + 0.5s arrow
+    const p = Math.min(1, dt);
+    const eased = 1 - Math.pow(1 - p, 3);
+    drawChart(eased);
+    if (p < 1) requestAnimationFrame(step);
+  }
+
+  function maybeStart() {
+    if (started) return;
+    // The deck uses reveal.js — start once the slide containing this canvas is visible.
+    const slide = canvas.closest('section');
+    if (!slide) { started = true; drawChart(1); return; }
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      started = true;
+      requestAnimationFrame(step);
+    }
+  }
+
+  // Initial paint (static, full) so it looks right even pre-animation.
+  drawChart(0);
+
+  if (window.Reveal) {
+    Reveal.on('slidechanged', maybeStart);
+    // Also trigger on ready in case we land directly on this slide via hash.
+    Reveal.on('ready', maybeStart);
+  } else {
+    window.addEventListener('load', maybeStart);
+  }
+})();
+</script>
+</body>
+</html>

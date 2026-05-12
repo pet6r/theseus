@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+.env.local
+
+# project artifacts
+reports/*.json
+reports/*.html
+samples/*
+!samples/.gitkeep
+ghidra_projects/
+*.gpr
+*.rep/
+
+# local agent state
+.claude/
+
+# build logs
+*.log
+build.log
+
+# editor
+.vscode/
+.idea/
+*.swp
+.DS_Store

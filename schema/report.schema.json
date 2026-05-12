@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theseus.local/schemas/report.schema.json",
+  "title": "TheseusReport",
+  "description": "Final structured report emitted by the Theseus pipeline for one binary.",
+  "type": "object",
+  "required": ["meta", "triage", "capabilities", "iocs", "verdict"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["binary_path", "sha256", "size_bytes", "analyzed_at", "duration_seconds", "model"],
+      "properties": {
+        "binary_path": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "analyzed_at": { "type": "string", "format": "date-time" },
+        "duration_seconds": { "type": "number", "minimum": 0 },
+        "model": { "type": "string" },
+        "ghidra_version": { "type": "string" }
+      }
+    },
+    "triage": {
+      "type": "object",
+      "required": ["entry_point", "arch", "format", "packed", "suspicion_score", "notable_imports", "notable_strings"],
+      "properties": {
+        "entry_point": { "type": "string" },
+        "arch": { "type": "string", "description": "e.g. x86:LE:64:default" },
+        "format": { "type": "string", "description": "e.g. PE, ELF, MachO" },
+        "packed": { "type": "boolean" },
+        "pack_evidence": { "type": "string" },
+        "suspicion_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "function_count": { "type": "integer", "minimum": 0 },
+        "import_count": { "type": "integer", "minimum": 0 },
+        "string_count": { "type": "integer", "minimum": 0 },
+        "notable_imports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "category", "reason"],
+            "properties": {
+              "name": { "type": "string" },
+              "category": { "type": "string", "enum": ["network", "process", "filesystem", "registry", "crypto", "anti-debug", "anti-vm", "injection", "persistence", "other"] },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "notable_strings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["value", "address"],
+            "properties": {
+              "value": { "type": "string" },
+              "address": { "type": "string" },
+              "category": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "MITRE ATT&CK techniques inferred from analysis",
+      "items": {
+        "type": "object",
+        "required": ["technique_id", "name", "confidence", "evidence"],
+        "properties": {
+          "technique_id": { "type": "string", "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$" },
+          "name": { "type": "string" },
+          "tactic": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["address", "snippet"],
+              "properties": {
+                "address": { "type": "string" },
+                "function": { "type": "string" },
+                "snippet": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "iocs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "value", "confidence"],
+        "properties": {
+          "type": { "type": "string", "enum": ["url", "domain", "ipv4", "ipv6", "email", "mutex", "registry_key", "file_path", "user_agent", "hash"] },
+          "value": { "type": "string" },
+          "source_address": { "type": "string" },
+          "xref_count": { "type": "integer", "minimum": 0 },
+          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "required": ["label", "score", "reasoning", "soc_action"],
+      "properties": {
+        "label": { "type": "string", "enum": ["clean", "suspicious", "vulnerable", "malicious", "unknown"] },
+        "score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "reasoning": { "type": "string" },
+        "soc_action": { "type": "string", "enum": ["ignore", "enrich", "monitor", "escalate", "quarantine"] },
+        "yara_rule": { "type": "string", "description": "Optional auto-generated YARA rule" }
+      }
+    },
+    "cost": {
+      "type": "object",
+      "properties": {
+        "input_tokens": { "type": "integer" },
+        "output_tokens": { "type": "integer" },
+        "cache_read_tokens": { "type": "integer" },
+        "cache_write_tokens": { "type": "integer" },
+        "usd": { "type": "number" }
+      }
+    }
+  }
+}
