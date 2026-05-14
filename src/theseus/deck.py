@@ -139,7 +139,7 @@ _TEMPLATE = Template(
 
 <section data-background-gradient="linear-gradient(to bottom, #001a33, #111)">
   <h2>Theseus</h2>
-  <p>SIEM → quarantine → Theseus → verdict → SOAR</p>
+  <p>SIEM -&gt; quarantine -&gt; Theseus -&gt; verdict -&gt; SOAR</p>
   <p style="opacity:0.6;">Built on Ghidra + libghidra + ghidrasql + Claude.</p>
 </section>
 

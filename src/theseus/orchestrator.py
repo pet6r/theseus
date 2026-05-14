@@ -105,6 +105,35 @@ def _extract_json(text: str) -> Any:
     raise ValueError(f"no JSON found in model output: {text[:400]}...")
 
 
+def _sanitize_phase_payload(
+    phase: str,
+    payload: Any,
+    log: Callable[[str], None],
+) -> None:
+    """Post-extract sanity fixes for known LLM-output drift.
+
+    Currently:
+    - `triage.import_count` must be >= len(`triage.notable_imports`). Models
+      sometimes guess 0 here when running on kernel drivers because the
+      `imports` SQL table is empty for them; we self-heal so downstream
+      consumers (deck, GUI, SOC ticket) don't show a contradiction.
+    """
+    if phase != "triage" or not isinstance(payload, dict):
+        return
+    notable = payload.get("notable_imports")
+    if not isinstance(notable, list) or not notable:
+        return
+    count = payload.get("import_count")
+    if not isinstance(count, int) or count < len(notable):
+        bumped = len(notable)
+        if count != bumped:
+            log(
+                f"[triage] import_count={count!r} < len(notable_imports)={bumped};"
+                f" bumped to {bumped}."
+            )
+        payload["import_count"] = bumped
+
+
 def _build_user_prompt(base: str, prior_context: dict[str, Any]) -> str:
     if not prior_context:
         return base
@@ -130,12 +159,17 @@ def analyze(
     libghidra_port = cfg.libghidra_port or find_free_port(18080, 18180)
     ghidrasql_port = cfg.ghidrasql_port or find_free_port(8081, 8181)
 
+    startup_timeout = float(
+        os.environ.get("GHIDRA_STARTUP_TIMEOUT")
+        or HeadlessRunner.__dataclass_fields__["startup_timeout"].default
+    )
     headless = HeadlessRunner(
         binary=binary,
         project_dir=cfg.project_dir,
         ghidra_home=cfg.ghidra_home,
         port=libghidra_port,
         log_cb=cb.on_log,
+        startup_timeout=startup_timeout,
     )
     sql = GhidrasqlRunner(
         libghidra_url=headless.base_url,
@@ -153,6 +187,7 @@ def analyze(
 
     phase_payloads: dict[str, Any] = {}
     totals = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "cost_usd": 0.0}
+    phase_costs: dict[str, dict[str, float | int]] = {}
 
     try:
         with headless, sql:
@@ -196,11 +231,28 @@ def analyze(
                     totals["cache_write"] += pr.cache_write_tokens
                     totals["cost_usd"] += pr.cost_usd
 
+                    phase_usd = pr.cost_usd
+                    if not phase_usd:
+                        phase_usd = _estimate_cost_usd(cfg.model, {
+                            "input": pr.input_tokens,
+                            "output": pr.output_tokens,
+                            "cache_read": pr.cache_read_tokens,
+                            "cache_write": pr.cache_write_tokens,
+                        })
+                    phase_costs[phase] = {
+                        "input_tokens": pr.input_tokens,
+                        "output_tokens": pr.output_tokens,
+                        "cache_read_tokens": pr.cache_read_tokens,
+                        "cache_write_tokens": pr.cache_write_tokens,
+                        "cost_usd": round(phase_usd, 4),
+                    }
+
                     try:
                         payload = _extract_json(pr.raw_text)
                     except ValueError as e:
                         cb.log(f"[{phase}] JSON extract failed: {e}")
                         payload = {"error": "json_extract_failed", "raw": pr.raw_text}
+                    _sanitize_phase_payload(phase, payload, cb.log)
                     phase_payloads[phase] = payload
 
                     if cb.on_phase_done:
@@ -234,6 +286,7 @@ def analyze(
             "cache_read_tokens": totals["cache_read"],
             "cache_write_tokens": totals["cache_write"],
             "usd": round(backend_reported_cost, 4) if backend_reported_cost else estimated_cost,
+            "phases": phase_costs,
         },
     }
     return report

@@ -71,7 +71,11 @@ class HeadlessRunner:
     ghidra_home: Path
     port: int = 18080
     project_name: str = field(default_factory=lambda: f"theseus-{uuid.uuid4().hex[:8]}")
-    startup_timeout: float = 180.0   # Ghidra auto-analysis can be slow on big binaries
+    # Ghidra auto-analysis runs BEFORE the post-script can bind the server
+    # port, so this timeout must cover the full analysis. NSIS / packed
+    # installers throw many decompiler errors and can take 4+ minutes even
+    # on small (~1MB) binaries. Override via GHIDRA_STARTUP_TIMEOUT env var.
+    startup_timeout: float = 360.0
     log_cb: Optional[Callable[[str], None]] = None
     _proc: Optional[subprocess.Popen] = field(default=None, init=False, repr=False)
     _log_path: Optional[Path] = field(default=None, init=False, repr=False)

@@ -10,7 +10,7 @@ The system is a thin orchestrator over three external pieces it does not own: **
 
 ## Commands
 
-Install (editable, src-layout):
+Install (editable, src-layout). Python 3.12+ required (`pyproject.toml`):
 
 ```bash
 python -m venv .venv && .venv\Scripts\activate     # Windows
@@ -88,6 +88,8 @@ Key invariants when editing:
 ## GUI threading
 
 `gui.py` runs the pipeline on a daemon thread and ships events via a thread-safe `queue.Queue` (`EVENTS`). The main loop drains it once per frame via `_frame_pump`. **Never touch `dpg.*` from the worker thread** — emit an event and handle it in `_handle_event` instead. `STATE` is a shared dict; mutate from worker only for fields not read by `_handle_event` mid-flight (currently safe because `_handle_event` only reads `STATE["report"]` after the `done` event).
+
+`gui_drop.py` enables OS drag-drop on the DearPyGui viewport (Windows-only; no-op elsewhere). It subclasses the viewport HWND's WndProc via Win32 `SetWindowLongPtr`. The new `WNDPROC` callback and the original proc pointer are kept in **module globals** (`_new_wndproc_ref`, `_old_wndproc`) — without those refs, ctypes garbage-collects the trampoline and Windows crashes calling a freed pointer. Don't move them to function scope.
 
 ## Sample data safety
 

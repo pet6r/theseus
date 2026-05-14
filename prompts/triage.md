@@ -6,10 +6,15 @@
 
 1. Identify architecture, file format, and entry point.
    - `SELECT * FROM program_info LIMIT 1;` (or equivalent metadata table)
-2. Count functions, imports, strings.
+2. Count functions, imports, strings. Run the queries; do not guess.
    - `SELECT COUNT(*) FROM funcs;`
    - `SELECT COUNT(*) FROM imports;`
    - `SELECT COUNT(*) FROM strings;`
+   - **Invariant:** `import_count` MUST be >= `len(notable_imports)`. If you
+     surface any item in `notable_imports`, the count cannot be 0. For kernel
+     drivers, fall back to `SELECT COUNT(DISTINCT name) FROM imports;` or
+     count distinct rows from `external_symbols` / `external_functions` if
+     the `imports` table is empty.
 3. Pack detection — check section entropy / .text vs .data ratio / suspiciously few imports / "UPX" markers in section names.
    - `SELECT name, size, entropy FROM memory_blocks;`
    - `SELECT name FROM imports WHERE name LIKE 'UPX%' OR name LIKE '%packed%';`

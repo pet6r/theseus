@@ -117,7 +117,21 @@
         "output_tokens": { "type": "integer" },
         "cache_read_tokens": { "type": "integer" },
         "cache_write_tokens": { "type": "integer" },
-        "usd": { "type": "number" }
+        "usd": { "type": "number" },
+        "phases": {
+          "type": "object",
+          "description": "Per-phase token + USD breakdown keyed by phase name.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "input_tokens": { "type": "integer" },
+              "output_tokens": { "type": "integer" },
+              "cache_read_tokens": { "type": "integer" },
+              "cache_write_tokens": { "type": "integer" },
+              "cost_usd": { "type": "number" }
+            }
+          }
+        }
       }
     }
   }
