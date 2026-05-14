@@ -236,13 +236,23 @@ def _handle_event(ev: dict[str, Any]) -> None:
         _append_log(f"[ok]  phase {ev['phase']} done")
 
     elif kind == "token":
-        STATE["last_tokens"] = (int(ev["input"]), int(ev["output"]))
-        dpg.set_value("tok_in", f"input: {ev['input']:,}")
-        dpg.set_value("tok_out", f"output: {ev['output']:,}")
+        # Backends fire `on_token` once per phase with that phase's totals.
+        # Accumulate across phases so the stat strip and Cost tab top line
+        # show the cumulative run cost, not just the last phase's slice.
+        cur_in, cur_out = STATE.get("last_phase_tokens", (0, 0))
+        new_in = int(ev["input"])
+        new_out = int(ev["output"])
+        STATE["total_in"] = STATE.get("total_in", 0) + new_in
+        STATE["total_out"] = STATE.get("total_out", 0) + new_out
+        STATE["last_phase_tokens"] = (new_in, new_out)
+        total_in = STATE["total_in"]
+        total_out = STATE["total_out"]
+        dpg.set_value("tok_in", f"input: {total_in:,}")
+        dpg.set_value("tok_out", f"output: {total_out:,}")
         if dpg.does_item_exist("stat_tokens"):
             dpg.set_value(
                 "stat_tokens",
-                f"{ev['input']:,} in / {ev['output']:,} out",
+                f"{total_in:,} in / {total_out:,} out",
             )
 
     elif kind == "done":
@@ -498,6 +508,9 @@ def _start_analysis(path: Path) -> None:
     STATE["current_phase"] = None
     STATE["start_monotonic"] = time.monotonic()
     STATE["last_tokens"] = (0, 0)
+    STATE["total_in"] = 0
+    STATE["total_out"] = 0
+    STATE["last_phase_tokens"] = (0, 0)
 
     # Stat strip resets.
     for tag, val in [
