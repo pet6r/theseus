@@ -86,8 +86,4 @@ JSON output is schema-stable. See `schema/report.schema.json`.
 
 - [crackmes.one](https://crackmes.one) — legal RE practice binaries
 - [MalwareBazaar](https://bazaar.abuse.ch) — real malware (**isolated VM only**)
-- Always analyze unknown binaries inside FlareVM, REMnux, or a network-isolated VM
-
-## License
-
-Project: TBD. Upstream (Ghidra: Apache 2.0; libghidra/ghidrasql: see upstream repos).
+- https://github.com/lallouslab/vulnerable-drivers-ex
