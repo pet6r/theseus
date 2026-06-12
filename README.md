@@ -13,10 +13,6 @@ Built on:
 - [DearPyGui](https://github.com/hoffstadt/dearpygui) — GUI
 - [reveal.js](https://revealjs.com/) — demo deck output
 
-## Mythology
-
-In the Labyrinth, **Daedalus** built the maze, **Theseus** navigated it, and **Ariadne's thread** kept him oriented. A compiled binary is a labyrinth: the compiler/obfuscator is Daedalus, the analyst is Theseus, and the AI agent — guided by the skills chain — is Ariadne's thread.
-
 ## Architecture
 
 ```
