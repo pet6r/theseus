@@ -85,5 +85,4 @@ JSON output is schema-stable. See `schema/report.schema.json`.
 ## Sample data
 
 - [crackmes.one](https://crackmes.one) — legal RE practice binaries
-- [MalwareBazaar](https://bazaar.abuse.ch) — real malware (**isolated VM only**)
 - https://github.com/lallouslab/vulnerable-drivers-ex
